@@ -1,0 +1,45 @@
+{%- liquid
+  assign customer_country = ''
+  if customer and customer.default_address
+    assign customer_country = customer.default_address.country_code
+  endif
+-%}
+<div
+  class="setu-duties{% if block.settings.show_border %} setu-duties--bordered{% endif %}"
+  data-setu-duties
+  data-heading="{{ block.settings.heading | default: 'Estimated import duties & taxes' | escape }}"
+  data-open-detail="{{ block.settings.open_detail }}"
+  data-allow-other="{{ block.settings.allow_other }}"
+  data-require-destination="{{ block.settings.require_destination }}"
+  data-checkout-selector="{{ block.settings.checkout_selector | escape }}"
+  data-cart-currency="{{ cart.currency.iso_code }}"
+  data-customer-country="{{ customer_country }}"
+  data-market-country="{{ localization.country.iso_code }}"
+  style="--setu-accent: {{ block.settings.accent | default: '#1a1a1a' }};"
+  {{ block.shopify_attributes }}
+>
+  <script type="application/json" data-setu-money-format>{{ shop.money_format | json }}</script>
+  {%- comment -%} Customer-facing wording. Edit here to change the text on the cart. {%- endcomment -%}
+  <script type="application/json" data-setu-labels>
+    {
+      "heading": "Estimated import duties & taxes",
+      "destination": "Shipping destination",
+      "select": "Select country",
+      "choose": "Select your shipping destination to see estimated import duties and taxes.",
+      "calculating": "Calculating…",
+      "unavailable": "Duty estimate is unavailable right now.",
+      "subtotal": "Product subtotal",
+      "none": "No duties could be estimated for these items.",
+      "total": "Total estimated duties & taxes",
+      "totalPartial": "Total estimated duties & taxes (partial)",
+      "landed": "Estimated landed cost",
+      "partial": "Partial estimate – excludes:",
+      "notCovered": "Items not yet covered for ",
+      "detail": "View by product category",
+      "other": "Other country",
+      "otherNote": "We don't have duty estimates for this country yet. Import duties and taxes may be charged on delivery.",
+      "lockHint": "Select your shipping destination above to continue to checkout."
+    }
+  </script>
+  <noscript>Enable JavaScript to see estimated import duties.</noscript>
+</div>

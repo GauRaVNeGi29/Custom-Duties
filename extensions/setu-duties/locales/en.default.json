@@ -1,0 +1,13 @@
+{
+  "heading": "Estimated import duties & taxes",
+  "select_label": "Shipping destination",
+  "select_placeholder": "Select country",
+  "choose_prompt": "Select your shipping destination to see estimated import duties and taxes.",
+  "subtotal": "Product subtotal",
+  "total": "Total estimated duties & taxes",
+  "landed": "Estimated landed cost",
+  "detail": "View by product category",
+  "loading": "Updating estimate…",
+  "unavailable": "Duty estimate is unavailable right now.",
+  "partial": "Partial estimate – excludes the items below"
+}

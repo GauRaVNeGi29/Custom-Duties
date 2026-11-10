@@ -1,0 +1,38 @@
+# Production app configuration for Setu Import Duties.
+# 1. Run:  shopify app config link   → "Create a new app" → name it "Setu Import Duties" → config name "production"
+# 2. Open the new shopify.app.production.toml, keep its client_id line, and replace everything else with this file.
+# 3. Replace https://YOUR-APP-URL (3 places) with your Render address, e.g. https://setu-duties.onrender.com
+client_id = "KEEP-THE-CLIENT-ID-SHOPIFY-WROTE"
+name = "Setu Import Duties"
+application_url = "https://YOUR-APP-URL"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,read_markets,write_app_proxy"
+
+[auth]
+redirect_urls = [ "https://YOUR-APP-URL/auth/callback" ]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/products"
+  topics = [ "products/create", "products/update", "products/delete" ]
+
+[app_proxy]
+url = "https://YOUR-APP-URL/proxy"
+prefix = "apps"
+subpath = "setu-duties"

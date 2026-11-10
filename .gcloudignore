@@ -1,0 +1,11 @@
+# Files not uploaded by "gcloud run deploy --source ."
+.cache
+build
+node_modules
+.react-router
+.env
+.env.*
+!.env.example
+.shopify
+.git
+tests

@@ -1,0 +1,14 @@
+﻿origin_country,destination_country,hsn_code,hsn_description,component_name,component_type,rate_value,currency,calculation_basis,calculation_order,charge_scope,is_active,effective_from,effective_to,notes
+India,USA,71179090,Imitation Jewellery,Basic Import Duty,percentage,10,USD,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,71179090,Imitation Jewellery,Additional Tariff,percentage,11,USD,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,71179090,Imitation Jewellery,Merchandise Processing Fee (MPF),fixed,3,USD,not_applicable,3,per_cart,True,,,Illustrative sample only; configured once per cart.
+India,Australia,71179090,Imitation Jewellery,Basic Import Duty,percentage,5,AUD,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,Australia,71179090,Imitation Jewellery,Additional Import Charge,percentage,4,AUD,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,UK,71179090,Imitation Jewellery,Basic Import Duty,percentage,6,GBP,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,UK,71179090,Imitation Jewellery,Additional Tariff,percentage,4,GBP,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,Germany,71179090,Imitation Jewellery,Basic Import Duty,percentage,8,EUR,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,Germany,71179090,Imitation Jewellery,Additional Import Tax,percentage,5,EUR,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,42023120,Leather Wallet,Basic Import Duty,percentage,8,USD,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,42023120,Leather Wallet,Additional Tariff,percentage,12,USD,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,42022220,Fabric Bag,Basic Import Duty,percentage,5,USD,product_value,1,per_product_value,True,,,Illustrative sample only; replace with rates you decide.
+India,USA,42022220,Fabric Bag,Additional Tariff,percentage,10,USD,product_value,2,per_product_value,True,,,Illustrative sample only; replace with rates you decide.

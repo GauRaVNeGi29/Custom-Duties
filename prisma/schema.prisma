@@ -1,0 +1,236 @@
+// Setu Store – Import Duty & Tax Calculator
+//
+// Model:  Hsn ──< RateProfile (HSN + origin + destination) ──< TaxComponent (unlimited)
+//                       │
+//                 Destination (countries offered in the cart selector)
+//
+// Every rate is entered by Setu Store. Nothing in this schema is populated
+// from an external tariff source.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Shopify session storage (from the app template)
+// ---------------------------------------------------------------------------
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Enums – values match the CSV vocabulary
+// ---------------------------------------------------------------------------
+enum ChargeType {
+  percentage
+  fixed
+}
+
+enum CalculationBasis {
+  product_value        // % of the HSN group's product value
+  value_plus_prior     // % of product value + every earlier component in the same group
+  value_plus_selected  // % of product value + the components named in basisIncludes
+  not_applicable       // fixed charges
+}
+
+enum ChargeScope {
+  per_product_value    // percentage components: applied to the HSN group value
+  per_unit             // fixed × total quantity of the HSN group ("per product")
+  per_line             // fixed × number of cart lines in the HSN group
+  per_hsn_group        // fixed once per HSN group
+  per_vendor_shipment  // NOT USED in v1: whether vendors ship separately is only known at checkout; import rejects it
+  per_cart             // fixed once per cart (your MPF decision)
+}
+
+enum ImportMode {
+  merge                // add + update rows in the file, keep everything else
+  replace_profiles     // for every HSN+country in the file, remove components not in the file
+}
+
+enum ImportStatus {
+  previewed
+  committed
+  failed
+}
+
+// ---------------------------------------------------------------------------
+// Settings (one row per shop)
+// ---------------------------------------------------------------------------
+model ShopSettings {
+  shop                     String       @id
+  // App-owned metafield ($app:hsn_code): only this app and Setu Store staff in
+  // Shopify admin can change it; seller apps (Webkul) cannot write it.
+  hsnMetafieldNamespace    String       @default("$app")
+  hsnMetafieldKey          String       @default("hsn_code")
+  // Order in which HSN sources are tried. Shopify's own HS code
+  // ("shopify_hs_code") is left out by default because sellers can edit it;
+  // use the "copy from Shopify HS codes" action to bring those values in once.
+  hsnSourceOrder           String[]     @default(["variant_metafield", "product_metafield"])
+  defaultOrigin            String       @default("IN") @db.Char(2)
+  // Currency Shopify carts are charged in. Setu Store sells in INR everywhere
+  // (Bucks converts the display for customers), so every fixed charge is
+  // entered in INR. Change here only if Shopify carts ever use another currency.
+  chargeCurrency           String       @default("INR") @db.Char(3)
+  timezone                 String       @default("Asia/Kolkata")
+  // Cart display
+  useDiscountedValue       Boolean      @default(true)
+  showLandedCost           Boolean      @default(true)
+  prefillFromCustomer      Boolean      @default(true)
+  prefillFromMarketCountry Boolean      @default(false) // may come from IP geolocation – off by default
+  disclaimer               String       @default("Estimated import duties and taxes based on Setu Store's configured rates. Not added to your checkout total. Any duties collected at checkout or on delivery are charged separately.")
+  lastFullSyncAt           DateTime?
+  syncBulkOpId             String?      // Shopify bulk export in progress for the full product sync
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Rate configuration
+// ---------------------------------------------------------------------------
+model Hsn {
+  id          String        @id @default(uuid()) @db.Uuid
+  shop        String
+  code        String        // digits only, stored as text so leading zeros survive
+  description String?
+  profiles    RateProfile[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([shop, code])
+  @@index([shop, description])
+}
+
+model Destination {
+  id           String        @id @default(uuid()) @db.Uuid
+  shop         String
+  countryCode  String        @db.Char(2) // ISO 3166-1 alpha-2: US, GB, DE, AU …
+  displayName  String        // shown in the cart selector
+  currency     String        @db.Char(3) // currency carts for this country are charged in; INR today (Bucks converts display only)
+  enabled      Boolean       @default(true)
+  sortOrder    Int           @default(100)
+  profiles     RateProfile[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([shop, countryCode])
+}
+
+model RateProfile {
+  id            String         @id @default(uuid()) @db.Uuid
+  shop          String
+  hsnId         String         @db.Uuid
+  hsn           Hsn            @relation(fields: [hsnId], references: [id], onDelete: Cascade)
+  originCountry String         @default("IN") @db.Char(2) // fixed to India in v1, kept as a column for later
+  destinationId String         @db.Uuid
+  destination   Destination    @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  active        Boolean        @default(true)
+  notes         String?
+  components    TaxComponent[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([hsnId, originCountry, destinationId])
+  @@index([shop, destinationId, originCountry])
+}
+
+model TaxComponent {
+  id            String           @id @default(uuid()) @db.Uuid
+  profileId     String           @db.Uuid
+  profile       RateProfile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name          String           // free text: "Basic Import Duty", "Section 301 Duty", "MPF" …
+  chargeType    ChargeType
+  rateValue     Decimal          @db.Decimal(14, 4) // percent for percentage (10 = 10%), amount for fixed
+  currency      String?          @db.Char(3)        // required for fixed charges
+  basis         CalculationBasis
+  basisIncludes String[]         @default([])       // component names, for value_plus_selected
+  calcOrder     Int              @default(100)
+  scope         ChargeScope
+  minAmount     Decimal?         @db.Decimal(14, 4)
+  maxAmount     Decimal?         @db.Decimal(14, 4)
+  effectiveFrom DateTime?        @db.Date
+  effectiveTo   DateTime?        @db.Date
+  active        Boolean          @default(true)
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([profileId, name])
+  @@index([profileId, calcOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Variant -> HSN / vendor map, kept current by product webhooks
+// ---------------------------------------------------------------------------
+model ProductHsn {
+  shop                String
+  variantId           BigInt
+  productId           BigInt
+  productTitle        String
+  variantTitle        String?
+  sku                 String?
+  vendor              String?   // product Vendor field, for filtering in admin only
+  hsnVariantMetafield String?
+  hsnProductMetafield String?
+  hsnShopify          String?   // inventoryItem.harmonizedSystemCode
+  hsnResolved         String?   // after ShopSettings.hsnSourceOrder
+  hsnSource           String?   // which source won
+  syncedAt            DateTime  @default(now())
+
+  @@id([shop, variantId])
+  @@index([shop, productId])
+  @@index([shop, hsnResolved])
+}
+
+// ---------------------------------------------------------------------------
+// Bookkeeping
+// ---------------------------------------------------------------------------
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  shop      String
+  entity    String   // hsn | destination | profile | component | settings | import
+  entityId  String?
+  action    String   // create | update | delete | import
+  before    Json?
+  after     Json?
+  actor     String?  // staff user email or "csv-import"
+  createdAt DateTime @default(now())
+
+  @@index([shop, entity, createdAt])
+}
+
+model ImportJob {
+  id          String       @id @default(uuid()) @db.Uuid
+  shop        String
+  fileName    String?
+  mode        ImportMode
+  status      ImportStatus
+  rowCount    Int
+  summary     Json         // counts of creates / updates / deletes / unchanged
+  issues      Json         // row-level errors and warnings
+  actor       String?
+  createdAt   DateTime     @default(now())
+  committedAt DateTime?
+
+  @@index([shop, createdAt])
+}
