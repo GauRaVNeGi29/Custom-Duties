@@ -13,7 +13,8 @@ import {
 import { normaliseHsn } from "../lib/products/sync.server";
 
 /**
- * Products & HSN codes – managed by the Setu Store team only.
+ * Products & HSN codes. The cart uses Shopify's HS code field on each
+ * product; the app-owned HSN field is an optional override.
  * Edit one product, bulk-set many, import/export CSV, find missing codes,
  * and copy existing Shopify HS codes into the HSN field once.
  */
@@ -177,8 +178,9 @@ export default function Products() {
           {data.counts.products} products · {data.counts.missing} missing HSN · {data.counts.unconfigured} with an HSN that has no rates yet
         </s-paragraph>
         <s-paragraph>
-          HSN codes are stored on each product in Shopify (an app-owned field only your team and this app can change). You can also edit the
-          field on the product page in Shopify admin.
+          The cart uses the HS code entered on each product in Shopify (product page → Shipping → Harmonized System code), so
+          nothing needs to be filled in here. Use the HSN fields below only to override a product whose Shopify HS code is missing
+          or wrong; an override always wins.
         </s-paragraph>
         {data.counts.withShopifyOnly > 0 && (
           <s-banner tone="info">

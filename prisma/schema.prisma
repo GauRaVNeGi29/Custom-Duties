@@ -83,10 +83,10 @@ model ShopSettings {
   // Shopify admin can change it; seller apps (Webkul) cannot write it.
   hsnMetafieldNamespace    String       @default("$app")
   hsnMetafieldKey          String       @default("hsn_code")
-  // Order in which HSN sources are tried. Shopify's own HS code
-  // ("shopify_hs_code") is left out by default because sellers can edit it;
-  // use the "copy from Shopify HS codes" action to bring those values in once.
-  hsnSourceOrder           String[]     @default(["variant_metafield", "product_metafield"])
+  // Order in which HSN sources are tried. Shopify's own HS code field
+  // ("shopify_hs_code", on each variant) is the normal source; the app-owned
+  // fields are optional overrides for the few products that need one.
+  hsnSourceOrder           String[]     @default(["variant_metafield", "product_metafield", "shopify_hs_code"])
   defaultOrigin            String       @default("IN") @db.Char(2)
   // Currency Shopify carts are charged in. Setu Store sells in INR everywhere
   // (Bucks converts the display for customers), so every fixed charge is

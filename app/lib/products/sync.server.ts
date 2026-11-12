@@ -8,11 +8,10 @@ import type { PrismaClient, ShopSettings } from "@prisma/client";
  * staff in Shopify admin can change it; seller apps such as Webkul cannot.
  *
  * HSN sources, tried in ShopSettings.hsnSourceOrder (default):
- *   1. variant metafield  $app:hsn_code   (override for a single variant)
- *   2. product metafield  $app:hsn_code
- * Shopify's own HS code is always recorded (hsnShopify) for reference and for
- * the one-time "copy from Shopify HS codes" action, but is not used for
- * calculation unless "shopify_hs_code" is added to hsnSourceOrder.
+ *   1. variant metafield  $app:hsn_code   (optional override for one variant)
+ *   2. product metafield  $app:hsn_code   (optional override for a product)
+ *   3. Shopify's own "HS code" field on each variant (inventoryItem.harmonizedSystemCode)
+ * Most products need nothing in the app: the HS code entered in Shopify is used.
  */
 
 /** Minimal shape of the Admin GraphQL client from authenticate.admin / authenticate.webhook. */
@@ -198,6 +197,26 @@ export async function syncProduct(db: PrismaClient, graphql: AdminGraphql, shop:
   const rows = resolveRows(shop, s, p, await allVariants(graphql, s, p));
   await writeProduct(db, shop, gidToNumber(p.id), rows);
   return rows.length;
+}
+
+const INVENTORY_ITEM_PRODUCT = `#graphql
+  query SetuInventoryItemProduct($id: ID!) {
+    inventoryItem(id: $id) { variants(first: 50) { nodes { product { id } } } }
+  }
+`;
+
+/**
+ * Shopify's HS code lives on the inventory item, so editing it fires
+ * inventory_items/update. One item can be shared by several variants, so
+ * resync every product it belongs to. Returns the variants written (0 if none).
+ */
+export async function syncInventoryItem(db: PrismaClient, graphql: AdminGraphql, shop: string, inventoryItemGid: string) {
+  const data = await gql(graphql, INVENTORY_ITEM_PRODUCT, { id: inventoryItemGid });
+  const nodes = (data.inventoryItem?.variants?.nodes ?? []) as { product: { id: string } | null }[];
+  const productGids = [...new Set(nodes.map((n) => n.product?.id).filter((id): id is string => !!id))];
+  let written = 0;
+  for (const gid of productGids) written += await syncProduct(db, graphql, shop, gid);
+  return written;
 }
 
 export async function removeProduct(db: PrismaClient, shop: string, productId: bigint) {

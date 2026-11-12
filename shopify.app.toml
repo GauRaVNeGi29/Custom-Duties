@@ -24,6 +24,10 @@ api_version = "2026-10"
   uri = "/webhooks/products"
   topics = [ "products/create", "products/update", "products/delete" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/inventory_items"
+  topics = [ "inventory_items/update" ]
+
 [app_proxy]
 url = "/proxy"
 prefix = "apps"

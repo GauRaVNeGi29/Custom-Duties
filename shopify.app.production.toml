@@ -1,0 +1,37 @@
+client_id = "6d5a656c1c64c5f14bc027be2edc7fbc"
+name = "Setu Import Duties"
+application_url = "https://setu-duties.onrender.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,read_markets,write_app_proxy"
+
+[auth]
+redirect_urls = [ "https://setu-duties.onrender.com/auth/callback" ]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/products"
+  topics = [ "products/create", "products/update", "products/delete" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/inventory_items"
+  topics = [ "inventory_items/update" ]
+
+[app_proxy]
+url = "https://setu-duties.onrender.com/proxy"
+prefix = "apps"
+subpath = "setu-duties"

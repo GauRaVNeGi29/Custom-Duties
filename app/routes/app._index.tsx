@@ -248,7 +248,7 @@ export default function Index() {
           {data.lastFullSyncAt ? ` · last full sync ${new Date(data.lastFullSyncAt).toLocaleString()}` : " · full sync not run yet"}
         </s-paragraph>
         <s-paragraph>
-          {"HSN codes are read from the variant override, then the product's HSN code field (both managed by your team)."}
+          {"HSN codes come from each product's HS code field in Shopify. An HSN override set in this app (on a product or variant) wins over it."}
         </s-paragraph>
         <s-button onClick={() => fetcher.submit({ intent: "sync" }, { method: "POST" })} {...(busy || syncing ? { loading: true } : {})}>
           {data.lastFullSyncAt ? "Resync all products" : "Sync all products"}
