@@ -1,12 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { syncInventoryItem } from "../lib/products/sync.server";
+import { enqueueSync } from "../lib/products/sync-queue.server";
 
 /**
  * inventory_items/update
  * Shopify's HS code field is stored on the inventory item, so an HS code edit
- * arrives here. Resync the item's product so the cart uses the new code.
+ * arrives here. Queue the item; the sync queue finds its product(s) and
+ * resyncs them one at a time (see sync-queue.server.ts).
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, payload, admin } = await authenticate.webhook(request);
@@ -14,11 +15,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const p = payload as { id: number | string; admin_graphql_api_id?: string };
   const gid = p.admin_graphql_api_id ?? `gid://shopify/InventoryItem/${p.id}`;
-  try {
-    await syncInventoryItem(db, admin.graphql, shop, gid);
-  } catch (e) {
-    console.error(`[setu] inventory item sync failed for ${shop} ${gid}`, e);
-    return new Response("sync failed", { status: 500 }); // Shopify retries
-  }
+  enqueueSync(db, admin.graphql, shop, "inventory_item", gid);
   return new Response();
 };

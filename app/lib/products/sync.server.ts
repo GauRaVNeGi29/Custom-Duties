@@ -85,7 +85,13 @@ export function normaliseHsn(raw: string | null | undefined): string | null {
 }
 
 export async function getSettings(db: PrismaClient, shop: string): Promise<ShopSettings> {
-  return db.shopSettings.upsert({ where: { shop }, update: {}, create: { shop } });
+  try {
+    return await db.shopSettings.upsert({ where: { shop }, update: {}, create: { shop } });
+  } catch (e) {
+    // Two first-time requests can both try to create the row; the loser reads it.
+    if ((e as { code?: string }).code !== "P2002") throw e;
+    return db.shopSettings.findUniqueOrThrow({ where: { shop } });
+  }
 }
 
 async function gql(graphql: AdminGraphql, query: string, variables: Record<string, unknown>) {
@@ -179,9 +185,13 @@ async function allVariants(graphql: AdminGraphql, s: ShopSettings, p: ProductNod
 }
 
 async function writeProduct(db: PrismaClient, shop: string, productId: bigint, rows: ReturnType<typeof resolveRows>) {
+  const variantIds = rows.map((r) => r.variantId);
   await db.$transaction([
-    db.productHsn.deleteMany({ where: { shop, productId } }),
-    db.productHsn.createMany({ data: rows }),
+    // Also clear these variants if they were stored under another product.
+    db.productHsn.deleteMany({ where: { shop, OR: [{ productId }, { variantId: { in: variantIds } }] } }),
+    // skipDuplicates: if two syncs of the same product overlap, the second
+    // leaves the first one's (equally fresh) rows instead of failing.
+    db.productHsn.createMany({ data: rows, skipDuplicates: true }),
   ]);
 }
 
@@ -199,6 +209,13 @@ export async function syncProduct(db: PrismaClient, graphql: AdminGraphql, shop:
   return rows.length;
 }
 
+/** Products an inventory item belongs to (one item can be shared by several variants). */
+export async function productsForInventoryItem(graphql: AdminGraphql, inventoryItemGid: string): Promise<string[]> {
+  const data = await gql(graphql, INVENTORY_ITEM_PRODUCT, { id: inventoryItemGid });
+  const nodes = (data.inventoryItem?.variants?.nodes ?? []) as { product: { id: string } | null }[];
+  return [...new Set(nodes.map((n) => n.product?.id).filter((id): id is string => !!id))];
+}
+
 const INVENTORY_ITEM_PRODUCT = `#graphql
   query SetuInventoryItemProduct($id: ID!) {
     inventoryItem(id: $id) { variants(first: 50) { nodes { product { id } } } }
@@ -211,9 +228,7 @@ const INVENTORY_ITEM_PRODUCT = `#graphql
  * resync every product it belongs to. Returns the variants written (0 if none).
  */
 export async function syncInventoryItem(db: PrismaClient, graphql: AdminGraphql, shop: string, inventoryItemGid: string) {
-  const data = await gql(graphql, INVENTORY_ITEM_PRODUCT, { id: inventoryItemGid });
-  const nodes = (data.inventoryItem?.variants?.nodes ?? []) as { product: { id: string } | null }[];
-  const productGids = [...new Set(nodes.map((n) => n.product?.id).filter((id): id is string => !!id))];
+  const productGids = await productsForInventoryItem(graphql, inventoryItemGid);
   let written = 0;
   for (const gid of productGids) written += await syncProduct(db, graphql, shop, gid);
   return written;
