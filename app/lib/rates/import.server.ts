@@ -55,6 +55,8 @@ function componentData(r: RateRow) {
     scope: r.scope,
     minAmount: r.minAmount,
     maxAmount: r.maxAmount,
+    shipmentValueAbove: r.shipmentValueAbove,
+    shipmentValueUpTo: r.shipmentValueUpTo,
     effectiveFrom: r.effectiveFrom ? new Date(`${r.effectiveFrom}T00:00:00Z`) : null,
     effectiveTo: r.effectiveTo ? new Date(`${r.effectiveTo}T00:00:00Z`) : null,
     active: r.active,
@@ -75,6 +77,8 @@ function diffComponent(existing: TaxComponent, r: RateRow) {
     scope: existing.scope,
     minAmount: decStr(existing.minAmount),
     maxAmount: decStr(existing.maxAmount),
+    shipmentValueAbove: decStr(existing.shipmentValueAbove),
+    shipmentValueUpTo: decStr(existing.shipmentValueUpTo),
     effectiveFrom: dateStr(existing.effectiveFrom),
     effectiveTo: dateStr(existing.effectiveTo),
     active: existing.active,
@@ -91,6 +95,8 @@ function diffComponent(existing: TaxComponent, r: RateRow) {
     scope: r.scope,
     minAmount: decStr(r.minAmount),
     maxAmount: decStr(r.maxAmount),
+    shipmentValueAbove: decStr(r.shipmentValueAbove),
+    shipmentValueUpTo: decStr(r.shipmentValueUpTo),
     effectiveFrom: r.effectiveFrom,
     effectiveTo: r.effectiveTo,
     active: r.active,
@@ -338,6 +344,8 @@ export async function exportRatesCsv(
     basis_components: c.basisIncludes.join("|"),
     min_amount: decStr(c.minAmount) ?? "",
     max_amount: decStr(c.maxAmount) ?? "",
+    shipment_value_above: decStr(c.shipmentValueAbove) ?? "",
+    shipment_value_up_to: decStr(c.shipmentValueUpTo) ?? "",
   }));
   return toCsv(rows);
 }

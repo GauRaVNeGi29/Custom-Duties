@@ -200,3 +200,49 @@ describe("rounding", () => {
     expect(r.totalCharges).toBe("101");
   });
 });
+
+describe("US MPF: informal vs formal entry by cart value (INR cart, USD 1 = INR 93.95)", () => {
+  // Informal: flat US$2.77 (₹260) when goods value ≤ US$2,500 (₹234,875).
+  // Formal: 0.3464% of goods value, min US$34.58 (₹3,249), max US$670.86 (₹63,027), when over US$2,500.
+  const mpfInformal = () => fixed("MPF (informal entry)", "260", "per_cart", 90, { currency: "INR", shipmentValueUpTo: "234875" });
+  const mpfFormal = () => pct("MPF (formal entry)", "0.3464", 91, {
+    scope: "per_cart", currency: null, minAmount: "3249", maxAmount: "63027", shipmentValueAbove: "234875",
+  });
+  const bags = () => profile("42022290", [pct("Basic Customs Duty", "17.6", 1), pct("Section 301 Duty", "10", 2), mpfInformal(), mpfFormal()]);
+  const notebooks = () => profile("48201090", [pct("Basic Customs Duty", "0", 1), pct("Section 301 Duty", "10", 2), mpfInformal(), mpfFormal()]);
+  const inr = { destination: "US", currency: "INR", today: "2026-11-12" };
+  const mpf = (r: ReturnType<typeof calculate>) => r.shipmentCharges.map((c) => [c.name, c.amount]);
+
+  it("a ₹10,000 cart pays the flat informal fee once, even with two HSNs", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "6000"), line("journal", "48201090", "4000")], profiles: { "42022290": bags(), "48201090": notebooks() } });
+    expect(mpf(r)).toEqual([["MPF (informal entry)", "260.00"]]);
+    expect(r.status).toBe("complete");
+  });
+
+  it("exactly US$2,500 (₹234,875) is still informal", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "234875")], profiles: { "42022290": bags() } });
+    expect(mpf(r)).toEqual([["MPF (informal entry)", "260.00"]]);
+  });
+
+  it("just over US$2,500 is formal and pays the minimum (0.3464% would be ₹814)", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "235000")], profiles: { "42022290": bags() } });
+    expect(mpf(r)).toEqual([["MPF (formal entry)", "3249.00"]]);
+    expect(r.shipmentCharges[0]).toMatchObject({ chargeType: "percentage", ratePercent: "0.3464", base: "235000.00" });
+  });
+
+  it("a ₹20 lakh cart pays 0.3464% of the whole cart (₹6,928)", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "1200000"), line("journal", "48201090", "800000")], profiles: { "42022290": bags(), "48201090": notebooks() } });
+    expect(mpf(r)).toEqual([["MPF (formal entry)", "6928.00"]]);
+  });
+
+  it("a very large cart is capped at the maximum (₹63,027)", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "30000000")], profiles: { "42022290": bags() } });
+    expect(mpf(r)).toEqual([["MPF (formal entry)", "63027.00"]]);
+  });
+
+  it("a per-cart percentage needs no currency and is not counted per HSN group", () => {
+    const r = calculate({ ...inr, lines: [line("tote", "42022290", "1000000")], profiles: { "42022290": bags() } });
+    expect(r.groups[0].components.map((c) => c.name)).toEqual(["Basic Customs Duty", "Section 301 Duty"]);
+    expect(r.totalCharges).toBe(String(176000 + 100000 + 3464) + ".00");
+  });
+});

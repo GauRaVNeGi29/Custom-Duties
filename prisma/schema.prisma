@@ -168,6 +168,10 @@ model TaxComponent {
   scope         ChargeScope
   minAmount     Decimal?         @db.Decimal(14, 4)
   maxAmount     Decimal?         @db.Decimal(14, 4)
+  // Apply only when the whole cart's goods value is above / up to these
+  // amounts (cart currency), e.g. US MPF formal entry over US$2,500.
+  shipmentValueAbove Decimal?    @db.Decimal(14, 4)
+  shipmentValueUpTo  Decimal?    @db.Decimal(14, 4)
   effectiveFrom DateTime?        @db.Date
   effectiveTo   DateTime?        @db.Date
   active        Boolean          @default(true)

@@ -18,9 +18,13 @@ import type {
  *     HSN + origin (India) + destination that the caller loaded.
  *  2. Group-level components (all percentages, and fixed charges scoped
  *     per unit / per line / per HSN group) run in calcOrder.
- *  3. Per-cart fixed charges (e.g. MPF) are collected from every group and
- *     applied once, de-duplicated by name. When two HSNs configure the same
- *     charge with different amounts, the higher amount is used.
+ *  3. Per-cart charges (e.g. MPF) are collected from every group and
+ *     applied once, de-duplicated by name. A per-cart charge is fixed, or a
+ *     percentage of the whole cart's goods value (clamped to min/max). When
+ *     two HSNs configure the same charge differently, the higher amount wins.
+ *     Any component can be limited to carts whose goods value is above /
+ *     up to a set amount (e.g. MPF formal entry over US$2,500, informal
+ *     entry at or below it).
  *     Per-vendor charges are not used: whether vendors ship separately is
  *     only settled at checkout, so they are never added to the cart total.
  *  Currencies are never mixed: percentages use the cart's own amounts; a
@@ -59,6 +63,13 @@ function clamp(v: Decimal, min: string | null, max: string | null): Decimal {
   if (min != null && out.lt(min)) out = d(min);
   if (max != null && out.gt(max)) out = d(max);
   return out;
+}
+
+/** Does the cart's goods value meet the component's shipment-value condition? */
+export function meetsShipmentValue(c: EngineComponent, cartValue: Decimal): boolean {
+  if (c.shipmentValueAbove != null && !cartValue.gt(c.shipmentValueAbove)) return false;
+  if (c.shipmentValueUpTo != null && cartValue.gt(c.shipmentValueUpTo)) return false;
+  return true;
 }
 
 export function calculate(input: EngineInput): EngineResult {
@@ -124,7 +135,7 @@ export function calculate(input: EngineInput): EngineResult {
     }
 
     const applicable = profile.components
-      .filter((c) => isEffective(c, today))
+      .filter((c) => isEffective(c, today) && meetsShipmentValue(c, subtotal))
       .sort((a, b) => a.calcOrder - b.calcOrder || a.name.localeCompare(b.name));
 
     if (applicable.length === 0) {
@@ -189,6 +200,12 @@ export function calculate(input: EngineInput): EngineResult {
         continue;
       }
 
+      // percentage of the whole cart, applied once with the other per-cart charges
+      if (c.scope === "per_cart") {
+        shipmentCandidates.push(c);
+        continue;
+      }
+
       // percentage
       let componentBase = value;
       if (c.basis === "value_plus_prior") componentBase = value.plus(priorSum);
@@ -224,18 +241,28 @@ export function calculate(input: EngineInput): EngineResult {
   }
 
   // --- per-cart charges, applied once ------------------------------------
-  const shipment = new Map<string, EngineComponent>();
+  // Fixed: the configured amount. Percentage: of the whole cart's goods value.
+  const shipmentAmount = (c: EngineComponent) =>
+    c.chargeType === "percentage"
+      ? round(clamp(subtotal.times(c.rateValue).dividedBy(100), c.minAmount, c.maxAmount))
+      : round(clamp(d(c.rateValue), c.minAmount, c.maxAmount));
+  const shipment = new Map<string, { c: EngineComponent; amount: Decimal }>();
   for (const c of shipmentCandidates) {
+    const amount = shipmentAmount(c);
     const existing = shipment.get(c.name);
-    if (!existing || d(c.rateValue).gt(existing.rateValue)) shipment.set(c.name, c);
+    if (!existing || amount.gt(existing.amount)) shipment.set(c.name, { c, amount });
   }
   const shipmentCharges: ShipmentChargeResult[] = [...shipment.values()]
-    .sort((a, b) => a.calcOrder - b.calcOrder || a.name.localeCompare(b.name))
-    .map((c) => ({
-      name: c.name, chargeType: "fixed", scope: c.scope, ratePercent: null,
-      fixedAmount: fmt(d(c.rateValue), digits), base: null, multiplier: 1,
-      amount: fmt(round(clamp(d(c.rateValue), c.minAmount, c.maxAmount)), digits),
-    }));
+    .sort((a, b) => a.c.calcOrder - b.c.calcOrder || a.c.name.localeCompare(b.c.name))
+    .map(({ c, amount }) => c.chargeType === "percentage"
+      ? {
+        name: c.name, chargeType: "percentage", scope: c.scope, ratePercent: cleanRate(c.rateValue),
+        fixedAmount: null, base: fmt(subtotal, digits), multiplier: null, amount: fmt(amount, digits),
+      }
+      : {
+        name: c.name, chargeType: "fixed", scope: c.scope, ratePercent: null,
+        fixedAmount: fmt(d(c.rateValue), digits), base: null, multiplier: 1, amount: fmt(amount, digits),
+      });
 
   // --- summary, one row per component name -------------------------------
   const summaryMap = new Map<string, { row: SummaryRow; rates: Set<string>; total: Decimal }>();

@@ -39,6 +39,8 @@ export async function loadProfiles(
         scope: c.scope,
         minAmount: c.minAmount?.toString() ?? null,
         maxAmount: c.maxAmount?.toString() ?? null,
+        shipmentValueAbove: c.shipmentValueAbove?.toString() ?? null,
+        shipmentValueUpTo: c.shipmentValueUpTo?.toString() ?? null,
         effectiveFrom: dateStr(c.effectiveFrom),
         effectiveTo: dateStr(c.effectiveTo),
         active: c.active,

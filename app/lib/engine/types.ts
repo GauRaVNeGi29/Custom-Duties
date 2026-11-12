@@ -42,6 +42,10 @@ export interface EngineComponent {
   scope: ChargeScope;
   minAmount: string | null;
   maxAmount: string | null;
+  /** Apply only when the cart's goods value is above this (cart currency). */
+  shipmentValueAbove?: string | null;
+  /** Apply only when the cart's goods value is at most this (cart currency). */
+  shipmentValueUpTo?: string | null;
   /** "YYYY-MM-DD" or null */
   effectiveFrom: string | null;
   effectiveTo: string | null;
@@ -111,7 +115,7 @@ export interface GroupResult {
   total: string;
 }
 
-/** A per-cart fixed charge (e.g. MPF), applied once to the whole cart. */
+/** A per-cart charge (e.g. MPF), applied once to the whole cart: fixed, or a percentage of the cart value. */
 export type ShipmentChargeResult = ComponentResult;
 
 export interface SummaryRow {

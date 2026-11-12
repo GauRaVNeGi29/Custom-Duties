@@ -15,6 +15,11 @@ import type { CalculationBasis, ChargeScope, ChargeType } from "../engine/types"
  * Optional extra columns:
  *   basis_components  – for value_plus_selected, earlier component names separated by "|"
  *   min_amount, max_amount – optional floor / cap per component
+ *   shipment_value_above, shipment_value_up_to – apply the component only
+ *     when the whole cart's goods value is above / at most this amount
+ *     (charge currency), e.g. US MPF: formal entry over US$2,500.
+ * A percentage with charge_scope per_cart is a percentage of the whole cart's
+ * goods value, applied once (min_amount / max_amount apply to that total).
  */
 
 export const CSV_COLUMNS = [
@@ -23,6 +28,7 @@ export const CSV_COLUMNS = [
   "calculation_basis", "calculation_order", "charge_scope", "is_active",
   "effective_from", "effective_to", "notes",
   "basis_components", "min_amount", "max_amount",
+  "shipment_value_above", "shipment_value_up_to",
 ] as const;
 
 const REQUIRED = [
@@ -50,6 +56,8 @@ export interface RateRow {
   notes: string | null;
   minAmount: string | null;
   maxAmount: string | null;
+  shipmentValueAbove: string | null;
+  shipmentValueUpTo: string | null;
 }
 
 export interface RowIssue {
@@ -247,8 +255,10 @@ export function parseRatesCsv(text: string, opts: ParseOptions = {}): ParseResul
       fail("charge_scope", scopeRaw === ""
         ? "A fixed charge needs charge_scope: per_unit, per_line, per_hsn_group or per_cart."
         : `Unknown charge_scope "${get("charge_scope")}".`);
-    } else if (chargeType === "percentage" && scope !== "per_product_value") {
-      fail("charge_scope", "Percentage components are applied to product value; use per_product_value.");
+    } else if (chargeType === "percentage" && scope !== "per_product_value" && scope !== "per_cart") {
+      fail("charge_scope", "Percentage components use per_product_value, or per_cart for a percentage of the whole cart (e.g. US MPF).");
+    } else if (chargeType === "percentage" && scope === "per_cart" && basis && basis !== "product_value") {
+      fail("calculation_basis", "A per_cart percentage is taken on the cart's goods value; use calculation_basis product_value.");
     } else if (scope === "per_vendor_shipment") {
       fail("charge_scope", "Per-vendor charges are not used: whether items ship separately is only known at checkout. Use per_cart for a once-per-shipment charge such as MPF.");
     } else if (chargeType === "fixed" && !FIXED_SCOPES.has(scope)) {
@@ -283,6 +293,11 @@ export function parseRatesCsv(text: string, opts: ParseOptions = {}): ParseResul
     if (min === "invalid") fail("min_amount", "min_amount is not a number.");
     if (max === "invalid") fail("max_amount", "max_amount is not a number.");
     if (min instanceof Decimal && max instanceof Decimal && min.gt(max)) fail("max_amount", "max_amount is below min_amount.");
+    const above = parseDecimal(get("shipment_value_above"));
+    const upTo = parseDecimal(get("shipment_value_up_to"));
+    if (above === "invalid") fail("shipment_value_above", "shipment_value_above is not a number.");
+    if (upTo === "invalid") fail("shipment_value_up_to", "shipment_value_up_to is not a number.");
+    if (above instanceof Decimal && upTo instanceof Decimal && !above.lt(upTo)) fail("shipment_value_up_to", "shipment_value_up_to must be more than shipment_value_above.");
 
     if (!ok) return;
     rows.push({
@@ -305,6 +320,8 @@ export function parseRatesCsv(text: string, opts: ParseOptions = {}): ParseResul
       notes: get("notes") || null,
       minAmount: min instanceof Decimal ? min.toString() : null,
       maxAmount: max instanceof Decimal ? max.toString() : null,
+      shipmentValueAbove: above instanceof Decimal ? above.toString() : null,
+      shipmentValueUpTo: upTo instanceof Decimal ? upTo.toString() : null,
     });
   });
 
