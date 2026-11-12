@@ -1,39 +1,37 @@
+# Checks every push: install, type check, lint, Prisma schema, tests, build.
+# (Replaces the Shopify template's own CI, which tested npm/yarn/pnpm.)
 on: [push, pull_request]
 
 name: CI
 
 jobs:
   CI:
-    name: Node ${{ matrix.node }} and ${{ matrix.manager }}
+    name: Type check, lint and build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-        manager: ['npm', 'yarn', 'pnpm']
+    env:
+      # Placeholder so Prisma can read the schema; CI never connects to a database.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 22
+          cache: npm
 
-      - name: Install pnpm
-        if: ${{ matrix.manager == 'pnpm' }}
-        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-        with:
-          version: 8
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install dependencies using ${{ matrix.manager }}
-        run: ${{ matrix.manager }} install
-
-      - name: Run TypeScript type checking
-        if: ${{ !startsWith(github.head_ref || github.ref_name, 'javascript') }}
-        run: npx tsc --noEmit
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Validate Prisma
+      - name: Generate Prisma client and validate schema
         run: npx prisma generate && npx prisma validate
 
-      - name: Build application
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests (no database)
+        run: npx vitest run tests/engine.test.ts tests/csv.test.ts tests/cart.test.ts tests/currency.test.ts
+
+      - name: Build
         run: npm run build
